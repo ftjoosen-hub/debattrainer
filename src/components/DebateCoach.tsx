@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import MarkdownRenderer from './MarkdownRenderer'
 import FeedbackPanel from './FeedbackPanel'
-import SpeechControls from './SpeechControls'
+import useSpeechControls from '../hooks/useSpeechControls'
 
 interface DebateMessage {
   id: string
@@ -52,7 +52,7 @@ export default function DebateCoach() {
   const [ttsEnabled, setTtsEnabled] = useState(true)
   
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const speechControls = SpeechControls({
+  const speechControls = useSpeechControls({
     onTranscript: (text: string) => {
       setCurrentMessage(prev => prev + (prev ? ' ' : '') + text)
     },
@@ -242,18 +242,13 @@ Geef alleen het tegenargument, geen uitleg.`
         const counterData = await counterResponse.json()
         const tegenargument = counterData.response.trim()
         
-        addMessage('coach', `**Stelling:** ${stelling}
-
-**Eerste tegenargument:** ${tegenargument}
+        addMessage('coach', `**Eerste tegenargument:** ${tegenargument}
 
 Hoe reageer je daarop?`, {
-          isStelling: true,
           isTegenargument: true
         })
       } else {
-        addMessage('coach', `**Stelling:** ${stelling}
-
-**Eerste tegenargument:** Deze maatregel zou veel te duur zijn om uit te voeren. Hoe reageer je daarop?`, {
+        addMessage('coach', `**Eerste tegenargument:** Deze maatregel zou veel te duur zijn om uit te voeren. Hoe reageer je daarop?`, {
           isTegenargument: true
         })
       }
@@ -417,7 +412,7 @@ Houd het kort, vriendelijk en uitdagend voor ${session.selectedLevel} leerlingen
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[600px]">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Chat Area - Left Side (2/3 width on large screens) */}
       <div className="lg:col-span-2">
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col">
@@ -427,7 +422,7 @@ Houd het kort, vriendelijk en uitdagend voor ${session.selectedLevel} leerlingen
               <div>
                 <h2 className="text-xl font-bold">Debattraining</h2>
                 {session && (
-                  <div className="mt-3">
+                  <div className="mt-4">
                     <div className="text-blue-100 text-sm mb-2">
                       <span className="font-medium">Niveau:</span> {session.selectedLevel}
                       {session.customTopic && (
@@ -436,9 +431,9 @@ Houd het kort, vriendelijk en uitdagend voor ${session.selectedLevel} leerlingen
                         </span>
                       )}
                     </div>
-                    <div className="bg-white bg-opacity-20 rounded-lg p-3 border border-white border-opacity-30">
-                      <div className="text-xs font-medium text-blue-100 mb-1">STELLING:</div>
-                      <div className="text-white font-semibold text-base leading-relaxed">
+                    <div className="bg-white bg-opacity-25 rounded-xl p-4 border border-white border-opacity-40 shadow-lg">
+                      <div className="text-xs font-bold text-blue-100 mb-2 uppercase tracking-wide">Debatstelling:</div>
+                      <div className="text-white font-bold text-lg leading-relaxed">
                         {session.stelling}
                       </div>
                     </div>
@@ -491,7 +486,7 @@ Houd het kort, vriendelijk en uitdagend voor ${session.selectedLevel} leerlingen
 
           {/* Configuration Screen */}
           {showConfigScreen && (
-            <div className="p-8 min-h-[500px]">
+            <div className="p-8">
               <div className="max-w-md mx-auto">
                 <div className="text-center mb-8">
                   <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -510,7 +505,7 @@ Houd het kort, vriendelijk en uitdagend voor ${session.selectedLevel} leerlingen
 
                 <div className="space-y-6">
                   {/* Niveau Selectie */}
-                  <div>
+                  <div className="mb-6">
                     <label className="block text-sm font-semibold text-gray-700 mb-3">
                       📚 Op welk niveau wil je debatteren?
                     </label>
@@ -532,7 +527,7 @@ Houd het kort, vriendelijk en uitdagend voor ${session.selectedLevel} leerlingen
                   </div>
 
                   {/* Onderwerp Keuze */}
-                  <div>
+                  <div className="mb-6">
                     <label className="block text-sm font-semibold text-gray-700 mb-3">
                       🎯 Onderwerp (optioneel)
                     </label>
@@ -549,7 +544,7 @@ Houd het kort, vriendelijk en uitdagend voor ${session.selectedLevel} leerlingen
                   </div>
 
                   {/* Voorbeelden */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
                     <h4 className="text-sm font-semibold text-blue-800 mb-2">
                       💡 Populaire onderwerpen:
                     </h4>
@@ -597,7 +592,7 @@ Houd het kort, vriendelijk en uitdagend voor ${session.selectedLevel} leerlingen
 
           {/* Messages Area */}
           {isStarted && !showConfigScreen && (
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-[400px]">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 max-h-[500px]">
               {messages.filter(msg => !msg.isFeedback || msg.isReflectie).map((message) => (
                 <div
                   key={message.id}

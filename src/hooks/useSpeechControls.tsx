@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 
-interface SpeechControlsProps {
+interface UseSpeechControlsProps {
   onTranscript: (text: string) => void
   onSpeakText: (text: string) => void
   isListening: boolean
@@ -11,14 +11,14 @@ interface SpeechControlsProps {
   setIsSpeaking: (speaking: boolean) => void
 }
 
-export default function SpeechControls({
+export default function useSpeechControls({
   onTranscript,
   onSpeakText,
   isListening,
   setIsListening,
   isSpeaking,
   setIsSpeaking
-}: SpeechControlsProps) {
+}: UseSpeechControlsProps) {
   const [isSupported, setIsSupported] = useState(false)
   const recognitionRef = useRef<any>(null)
   const synthRef = useRef<SpeechSynthesis | null>(null)
@@ -117,14 +117,6 @@ export default function SpeechControls({
       synthRef.current.cancel()
       setIsSpeaking(false)
     }
-  }
-
-  if (!isSupported) {
-    return (
-      <div className="text-xs text-gray-500 text-center py-2">
-        Spraakfuncties niet ondersteund in deze browser
-      </div>
-    )
   }
 
   return {
