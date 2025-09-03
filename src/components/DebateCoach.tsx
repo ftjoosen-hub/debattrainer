@@ -29,6 +29,8 @@ interface DebateSession {
   maxRondes: number
   isCompleted: boolean
   startTime: Date
+  selectedLevel: string
+  customTopic: string
 }
 
 export default function DebateCoach() {
@@ -38,6 +40,11 @@ export default function DebateCoach() {
   const [session, setSession] = useState<DebateSession | null>(null)
   const [isStarted, setIsStarted] = useState(false)
   const [latestFeedback, setLatestFeedback] = useState<FeedbackData | null>(null)
+  
+  // Configuration states
+  const [showConfigScreen, setShowConfigScreen] = useState(true)
+  const [selectedLevel, setSelectedLevel] = useState('6 vwo')
+  const [customTopic, setCustomTopic] = useState('')
   
   // Speech states
   const [isListening, setIsListening] = useState(false)
@@ -144,29 +151,50 @@ export default function DebateCoach() {
 
   const startDebate = async () => {
     setIsLoading(true)
+    setShowConfigScreen(false)
     setIsStarted(true)
     setMessages([])
     setLatestFeedback(null)
     
     try {
+      let prompt = ''
+      
+      if (customTopic.trim()) {
+        prompt = `Genereer een actuele, maatschappelijk relevante debat-stelling voor leerlingen van ${selectedLevel} over het onderwerp "${customTopic}". 
+
+De stelling moet:
+- Geschikt zijn voor het niveau ${selectedLevel}
+- Controversieel genoeg voor een goed debat
+- Begrijpelijk en relevant voor leerlingen van dit niveau
+- Gebaseerd zijn op het onderwerp "${customTopic}"
+- Actueel zijn (2024/2025)
+
+Geef alleen de stelling terug, geen uitleg. Begin met "Stelling:" en geef dan één heldere zin.
+
+Genereer nu een stelling over "${customTopic}" voor ${selectedLevel}:`
+      } else {
+        prompt = `Genereer een actuele, maatschappelijk relevante debat-stelling voor leerlingen van ${selectedLevel}. De stelling moet:
+- Geschikt zijn voor het niveau ${selectedLevel}
+- Actueel zijn (2024/2025)
+- Controversieel genoeg voor een goed debat
+- Begrijpelijk en relevant voor leerlingen van dit niveau
+- Relevant voor hun leefwereld
+
+Geef alleen de stelling terug, geen uitleg. Begin met "Stelling:" en geef dan één heldere zin.
+
+Voorbeelden van goede stellingen voor ${selectedLevel}:
+- TikTok zou verboden moeten worden voor jongeren onder de 16
+- Scholen moeten AI-tools zoals ChatGPT volledig verbieden
+- Nederland moet een vierdaagse werkweek invoeren
+
+Genereer nu een nieuwe, actuele stelling voor ${selectedLevel}:`
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: `Genereer een actuele, maatschappelijk relevante debat-stelling voor havo/vwo leerlingen. De stelling moet:
-          - Actueel zijn (2024/2025)
-          - Controversieel genoeg voor een goed debat
-          - Begrijpelijk voor tieners
-          - Relevant voor hun leefwereld
-          
-          Geef alleen de stelling terug, geen uitleg. Begin met "Stelling:" en geef dan één heldere zin.
-          
-          Voorbeelden van goede stellingen:
-          - TikTok zou verboden moeten worden voor jongeren onder de 16
-          - Scholen moeten AI-tools zoals ChatGPT volledig verbieden
-          - Nederland moet een vierdaagse werkweek invoeren
-          
-          Genereer nu een nieuwe, actuele stelling:`,
+          message: prompt,
           aiModel: 'internet',
           useGrounding: true
         }),
@@ -184,16 +212,52 @@ export default function DebateCoach() {
         rondeNummer: 1,
         maxRondes: 4,
         isCompleted: false,
-        startTime: new Date()
+        startTime: new Date(),
+        selectedLevel,
+        customTopic: customTopic.trim()
       }
       setSession(newSession)
 
-      addMessage('coach', `**Stelling:** ${stelling}
+      // Generate first counter-argument appropriate for the level
+      const levelPrompt = `Je bent een debatcoach voor ${selectedLevel} leerlingen. De stelling is: "${stelling}"
+
+Geef een eerste tegenargument dat geschikt is voor het niveau ${selectedLevel}. Het tegenargument moet:
+- Begrijpelijk zijn voor ${selectedLevel} leerlingen
+- Uitdagend maar niet te complex
+- Economisch perspectief gebruiken (kosten, geld, banen)
+- Maximum 2 zinnen
+
+Geef alleen het tegenargument, geen uitleg.`
+
+      const counterResponse = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: levelPrompt,
+          aiModel: 'smart'
+        }),
+      })
+
+      if (counterResponse.ok) {
+        const counterData = await counterResponse.json()
+        const tegenargument = counterData.response.trim()
+        
+        addMessage('coach', `**Stelling:** ${stelling}
+
+**Eerste tegenargument:** ${tegenargument}
+
+Hoe reageer je daarop?`, {
+          isStelling: true,
+          isTegenargument: true
+        })
+      } else {
+        addMessage('coach', `**Stelling:** ${stelling}
 
 **Eerste tegenargument:** Deze maatregel zou veel te duur zijn om uit te voeren. Hoe reageer je daarop?`, {
-        isStelling: true,
-        isTegenargument: true
-      })
+          isStelling: true,
+          isTegenargument: true
+        })
+      }
 
     } catch (error) {
       console.error('Error starting debate:', error)
@@ -217,11 +281,11 @@ export default function DebateCoach() {
       let prompt = ''
       
       if (isLastRound) {
-        prompt = `Je bent een debatcoach. De leerling heeft zojuist gereageerd op tegenargument ${session.rondeNummer} over de stelling: "${session.stelling}"
+        prompt = `Je bent een debatcoach voor ${session.selectedLevel} leerlingen. De leerling heeft zojuist gereageerd op tegenargument ${session.rondeNummer} over de stelling: "${session.stelling}"
 
 Leerling reactie: "${studentResponse}"
 
-Dit was de laatste ronde. Geef nu een samenvatting in dit formaat:
+Dit was de laatste ronde. Geef nu een samenvatting in dit formaat, geschikt voor ${session.selectedLevel} niveau:
 
 GOED:
 - [Punt 1 wat goed ging]
@@ -235,9 +299,9 @@ VOORBEELD:
 "[Concreet voorbeeld hoe een argument sterker had gekund]"
 
 REFLECTIE:
-[Reflectievraag zoals "Hoe zou je dit debat anders aanpakken in een klas?"]
+[Reflectievraag passend bij ${session.selectedLevel} niveau]
 
-Houd het vriendelijk, constructief en motiverend.`
+Houd het vriendelijk, constructief en motiverend voor ${session.selectedLevel} leerlingen.`
       } else {
         const perspectieven = [
           'economisch (kosten, banen, groei)',
@@ -252,11 +316,11 @@ Houd het vriendelijk, constructief en motiverend.`
         
         const volgendePerspectief = perspectieven[session.rondeNummer % perspectieven.length]
         
-        prompt = `Je bent een debatcoach. De leerling reageert op tegenargument ${session.rondeNummer} over de stelling: "${session.stelling}"
+        prompt = `Je bent een debatcoach voor ${session.selectedLevel} leerlingen. De leerling reageert op tegenargument ${session.rondeNummer} over de stelling: "${session.stelling}"
 
 Leerling reactie: "${studentResponse}"
 
-Geef feedback en een nieuw tegenargument in dit exacte formaat:
+Geef feedback en een nieuw tegenargument in dit exacte formaat, geschikt voor ${session.selectedLevel} niveau:
 
 GOED:
 - [Wat ging goed aan dit argument]
@@ -268,9 +332,9 @@ VOORBEELD:
 "[Concreet voorbeeld hoe het argument sterker had gekund]"
 
 TEGENARGUMENT:
-[Nieuw tegenargument vanuit ${volgendePerspectief} perspectief - max 2 zinnen]
+[Nieuw tegenargument vanuit ${volgendePerspectief} perspectief - max 2 zinnen, geschikt voor ${session.selectedLevel}]
 
-Houd het kort, vriendelijk en uitdagend.`
+Houd het kort, vriendelijk en uitdagend voor ${session.selectedLevel} leerlingen.`
       }
 
       const response = await fetch('/api/chat', {
@@ -329,8 +393,10 @@ Houd het kort, vriendelijk en uitdagend.`
     setMessages([])
     setSession(null)
     setIsStarted(false)
+    setShowConfigScreen(true)
     setCurrentMessage('')
     setLatestFeedback(null)
+    setCustomTopic('')
     if (speechControls.isSupported) {
       speechControls.stopSpeaking()
     }
@@ -363,22 +429,25 @@ Houd het kort, vriendelijk en uitdagend.`
                 <h2 className="text-xl font-bold">Debattraining</h2>
                 {session && (
                   <div className="text-blue-100 text-sm mt-1">
-                    <span className="font-medium">Stelling:</span> {session.stelling}
+                    <span className="font-medium">Niveau:</span> {session.selectedLevel} • 
+                    <span className="font-medium ml-2">Stelling:</span> {session.stelling}
                   </div>
                 )}
               </div>
               
               <div className="flex items-center space-x-4">
                 {/* TTS Toggle */}
-                <button
-                  onClick={() => setTtsEnabled(!ttsEnabled)}
-                  className={`p-2 rounded-lg transition-colors ${
-                    ttsEnabled ? 'bg-blue-500 text-white' : 'bg-blue-200 text-blue-600'
-                  }`}
-                  title={ttsEnabled ? 'Uitspraak uitschakelen' : 'Uitspraak inschakelen'}
-                >
-                  {ttsEnabled ? '🔊' : '🔇'}
-                </button>
+                {isStarted && (
+                  <button
+                    onClick={() => setTtsEnabled(!ttsEnabled)}
+                    className={`p-2 rounded-lg transition-colors ${
+                      ttsEnabled ? 'bg-blue-500 text-white' : 'bg-blue-200 text-blue-600'
+                    }`}
+                    title={ttsEnabled ? 'Uitspraak uitschakelen' : 'Uitspraak inschakelen'}
+                  >
+                    {ttsEnabled ? '🔊' : '🔇'}
+                  </button>
+                )}
 
                 {/* Progress */}
                 {session && (
@@ -394,136 +463,229 @@ Houd het kort, vriendelijk en uitdagend.`
                     </div>
                   </div>
                 )}
+
+                {/* Reset Button */}
+                {isStarted && (
+                  <button
+                    onClick={resetDebate}
+                    className="px-3 py-1 bg-white bg-opacity-20 text-white rounded-lg hover:bg-opacity-30 transition-colors text-sm"
+                    title="Nieuw debat starten"
+                  >
+                    🔄 Reset
+                  </button>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
-            {!isStarted ? (
-              <div className="text-center py-12">
-                <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2v-6a2 2 0 012-2h8V4l4 4z" />
-                  </svg>
+          {/* Configuration Screen */}
+          {showConfigScreen && (
+            <div className="flex-1 p-8">
+              <div className="max-w-md mx-auto">
+                <div className="text-center mb-8">
+                  <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                    Debat Configuratie
+                  </h3>
+                  <p className="text-gray-600">
+                    Stel je debattraining in naar jouw niveau en interesse
+                  </p>
                 </div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                  Klaar voor je debattraining?
-                </h3>
-                <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                  Ik ga je uitdagen met een actuele stelling en tegenargumenten. 
-                  Jouw taak is om sterke reacties te geven!
-                </p>
-                <button
-                  onClick={startDebate}
-                  disabled={isLoading}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
-                >
-                  {isLoading ? '🎲 Stelling wordt gegenereerd...' : '🚀 Start Debat'}
-                </button>
-              </div>
-            ) : (
-              <>
-                {messages.filter(msg => !msg.isFeedback || msg.isReflectie).map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.type === 'student' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-3xl rounded-lg p-4 ${
-                        message.type === 'student'
-                          ? 'bg-blue-600 text-white'
-                          : message.isStelling
-                          ? 'bg-gradient-to-r from-orange-100 to-red-100 border border-orange-200'
-                          : message.isTegenargument
-                          ? 'bg-gradient-to-r from-red-100 to-pink-100 border border-red-200'
-                          : message.isReflectie
-                          ? 'bg-gradient-to-r from-purple-100 to-indigo-100 border border-purple-200'
-                          : 'bg-gray-100 border border-gray-200'
-                      }`}
+
+                <div className="space-y-6">
+                  {/* Niveau Selectie */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">
+                      📚 Op welk niveau wil je debatteren?
+                    </label>
+                    <select
+                      value={selectedLevel}
+                      onChange={(e) => setSelectedLevel(e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                     >
-                      {message.type === 'coach' && (
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center">
-                            <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center mr-2">
-                              <span className="text-white text-xs">🎯</span>
-                            </div>
-                            <span className="text-sm font-medium text-gray-700">
-                              {message.isStelling ? 'Stelling & Eerste Tegenargument' :
-                               message.isTegenargument ? 'Tegenargument' :
-                               message.isReflectie ? 'Samenvatting & Reflectie' :
-                               'Debatcoach'}
-                            </span>
+                      <option value="3 havo">3 HAVO</option>
+                      <option value="4 havo">4 HAVO</option>
+                      <option value="5 havo">5 HAVO</option>
+                      <option value="4 vwo">4 VWO</option>
+                      <option value="5 vwo">5 VWO</option>
+                      <option value="6 vwo">6 VWO</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Het niveau bepaalt de complexiteit van de argumenten en taalgebruik
+                    </p>
+                  </div>
+
+                  {/* Onderwerp Keuze */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">
+                      🎯 Onderwerp (optioneel)
+                    </label>
+                    <input
+                      type="text"
+                      value={customTopic}
+                      onChange={(e) => setCustomTopic(e.target.value)}
+                      placeholder="Bijv: klimaatverandering, sociale media, onderwijs..."
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Laat leeg voor een actueel onderwerp gekozen door de AI
+                    </p>
+                  </div>
+
+                  {/* Voorbeelden */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 className="text-sm font-semibold text-blue-800 mb-2">
+                      💡 Populaire onderwerpen:
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        'Klimaatverandering',
+                        'Sociale media',
+                        'Kunstmatige intelligentie',
+                        'Onderwijs',
+                        'Gezondheidszorg',
+                        'Milieu',
+                        'Technologie',
+                        'Politiek'
+                      ].map((topic) => (
+                        <button
+                          key={topic}
+                          onClick={() => setCustomTopic(topic.toLowerCase())}
+                          className="px-3 py-1 bg-white border border-blue-300 rounded-full text-sm text-blue-700 hover:bg-blue-100 transition-colors"
+                        >
+                          {topic}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Start Button */}
+                  <button
+                    onClick={startDebate}
+                    disabled={isLoading}
+                    className="w-full px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? (
+                      <div className="flex items-center justify-center">
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                        Stelling wordt gegenereerd...
+                      </div>
+                    ) : (
+                      '🚀 Start Debattraining'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Messages Area */}
+          {isStarted && !showConfigScreen && (
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {messages.filter(msg => !msg.isFeedback || msg.isReflectie).map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${message.type === 'student' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-3xl rounded-lg p-4 ${
+                      message.type === 'student'
+                        ? 'bg-blue-600 text-white'
+                        : message.isStelling
+                        ? 'bg-gradient-to-r from-orange-100 to-red-100 border border-orange-200'
+                        : message.isTegenargument
+                        ? 'bg-gradient-to-r from-red-100 to-pink-100 border border-red-200'
+                        : message.isReflectie
+                        ? 'bg-gradient-to-r from-purple-100 to-indigo-100 border border-purple-200'
+                        : 'bg-gray-100 border border-gray-200'
+                    }`}
+                  >
+                    {message.type === 'coach' && (
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center">
+                          <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center mr-2">
+                            <span className="text-white text-xs">🎯</span>
                           </div>
-                          
-                          {/* Speak button for coach messages */}
-                          <button
-                            onClick={() => speechControls.speakText(message.content)}
-                            disabled={isSpeaking}
-                            className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
-                            title="Bericht voorlezen"
-                          >
-                            {isSpeaking ? '🔊' : '🔈'}
-                          </button>
-                        </div>
-                      )}
-                      
-                      {message.type === 'student' && (
-                        <div className="flex items-center mb-2">
-                          <div className="w-6 h-6 bg-white bg-opacity-20 rounded-full flex items-center justify-center mr-2">
-                            <span className="text-white text-xs">👤</span>
-                          </div>
-                          <span className="text-sm font-medium text-blue-100">
-                            Jouw reactie
+                          <span className="text-sm font-medium text-gray-700">
+                            {message.isStelling ? 'Stelling & Eerste Tegenargument' :
+                             message.isTegenargument ? 'Tegenargument' :
+                             message.isReflectie ? 'Samenvatting & Reflectie' :
+                             'Debatcoach'}
                           </span>
                         </div>
-                      )}
-
-                      <MarkdownRenderer 
-                        content={message.content}
-                        className={message.type === 'student' ? 'text-white' : 'text-gray-800'}
-                      />
-                      
-                      <div className={`text-xs mt-2 ${
-                        message.type === 'student' ? 'text-blue-100' : 'text-gray-500'
-                      }`}>
-                        {message.timestamp.toLocaleTimeString('nl-NL', { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
-                        })}
+                        
+                        {/* Speak button for coach messages */}
+                        <button
+                          onClick={() => speechControls.speakText(message.content)}
+                          disabled={isSpeaking}
+                          className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
+                          title="Bericht voorlezen"
+                        >
+                          {isSpeaking ? '🔊' : '🔈'}
+                        </button>
                       </div>
-                    </div>
-                  </div>
-                ))}
-                
-                {isLoading && (
-                  <div className="flex justify-start">
-                    <div className="bg-gray-100 border border-gray-200 rounded-lg p-4 max-w-3xl">
+                    )}
+                    
+                    {message.type === 'student' && (
                       <div className="flex items-center mb-2">
-                        <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center mr-2">
-                          <span className="text-white text-xs">🎯</span>
+                        <div className="w-6 h-6 bg-white bg-opacity-20 rounded-full flex items-center justify-center mr-2">
+                          <span className="text-white text-xs">👤</span>
                         </div>
-                        <span className="text-sm font-medium text-gray-700">Debatcoach</span>
+                        <span className="text-sm font-medium text-blue-100">
+                          Jouw reactie
+                        </span>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
-                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                          <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                        </div>
-                        <span className="text-gray-600 text-sm">Ik denk na over mijn reactie...</span>
-                      </div>
+                    )}
+
+                    <MarkdownRenderer 
+                      content={message.content}
+                      className={message.type === 'student' ? 'text-white' : 'text-gray-800'}
+                    />
+                    
+                    <div className={`text-xs mt-2 ${
+                      message.type === 'student' ? 'text-blue-100' : 'text-gray-500'
+                    }`}>
+                      {message.timestamp.toLocaleTimeString('nl-NL', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      })}
                     </div>
                   </div>
-                )}
-                
-                <div ref={messagesEndRef} />
-              </>
-            )}
-          </div>
+                </div>
+              ))}
+              
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 border border-gray-200 rounded-lg p-4 max-w-3xl">
+                    <div className="flex items-center mb-2">
+                      <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center mr-2">
+                        <span className="text-white text-xs">🎯</span>
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">Debatcoach</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                        <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                      </div>
+                      <span className="text-gray-600 text-sm">Ik denk na over mijn reactie...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div ref={messagesEndRef} />
+            </div>
+          )}
 
           {/* Input Area */}
-          {isStarted && session && !session.isCompleted && (
+          {isStarted && !showConfigScreen && session && !session.isCompleted && (
             <div className="border-t border-gray-200 p-6">
               <div className="flex items-end space-x-3">
                 <div className="flex-1">
@@ -602,19 +764,6 @@ Houd het kort, vriendelijk en uitdagend.`
               </div>
             </div>
           )}
-
-          {/* Reset Button */}
-          {isStarted && (
-            <div className="absolute top-4 right-4">
-              <button
-                onClick={resetDebate}
-                className="px-3 py-1 bg-white bg-opacity-20 text-blue-600 rounded-lg hover:bg-opacity-30 transition-colors text-sm"
-                title="Nieuw debat starten"
-              >
-                🔄 Reset
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -623,7 +772,7 @@ Houd het kort, vriendelijk en uitdagend.`
         <div className="h-full">
           <FeedbackPanel 
             feedback={latestFeedback} 
-            isVisible={isStarted}
+            isVisible={isStarted && !showConfigScreen}
           />
         </div>
       </div>
