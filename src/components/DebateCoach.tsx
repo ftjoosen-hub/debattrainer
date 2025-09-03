@@ -249,12 +249,10 @@ Geef alleen het tegenargument, geen uitleg.`
 Hoe reageer je daarop?`, {
           isStelling: true,
           isTegenargument: true
-        })
       } else {
         addMessage('coach', `**Stelling:** ${stelling}
 
 **Eerste tegenargument:** Deze maatregel zou veel te duur zijn om uit te voeren. Hoe reageer je daarop?`, {
-          isStelling: true,
           isTegenargument: true
         })
       }
@@ -418,19 +416,31 @@ Houd het kort, vriendelijk en uitdagend voor ${session.selectedLevel} leerlingen
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[600px]">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[600px]">
       {/* Chat Area - Left Side (2/3 width on large screens) */}
       <div className="lg:col-span-2">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden h-full flex flex-col">
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col">
           {/* Header */}
           <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold">Debattraining</h2>
                 {session && (
-                  <div className="text-blue-100 text-sm mt-1">
-                    <span className="font-medium">Niveau:</span> {session.selectedLevel} • 
-                    <span className="font-medium ml-2">Stelling:</span> {session.stelling}
+                  <div className="mt-3">
+                    <div className="text-blue-100 text-sm mb-2">
+                      <span className="font-medium">Niveau:</span> {session.selectedLevel}
+                      {session.customTopic && (
+                        <span className="ml-3">
+                          <span className="font-medium">Onderwerp:</span> {session.customTopic}
+                        </span>
+                      )}
+                    </div>
+                    <div className="bg-white bg-opacity-20 rounded-lg p-3 border border-white border-opacity-30">
+                      <div className="text-xs font-medium text-blue-100 mb-1">STELLING:</div>
+                      <div className="text-white font-semibold text-base leading-relaxed">
+                        {session.stelling}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -480,7 +490,7 @@ Houd het kort, vriendelijk en uitdagend voor ${session.selectedLevel} leerlingen
 
           {/* Configuration Screen */}
           {showConfigScreen && (
-            <div className="flex-1 p-8">
+            <div className="p-8 min-h-[500px]">
               <div className="max-w-md mx-auto">
                 <div className="text-center mb-8">
                   <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -586,7 +596,7 @@ Houd het kort, vriendelijk en uitdagend voor ${session.selectedLevel} leerlingen
 
           {/* Messages Area */}
           {isStarted && !showConfigScreen && (
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-[400px]">
               {messages.filter(msg => !msg.isFeedback || msg.isReflectie).map((message) => (
                 <div
                   key={message.id}
@@ -596,8 +606,6 @@ Houd het kort, vriendelijk en uitdagend voor ${session.selectedLevel} leerlingen
                     className={`max-w-3xl rounded-lg p-4 ${
                       message.type === 'student'
                         ? 'bg-blue-600 text-white'
-                        : message.isStelling
-                        ? 'bg-gradient-to-r from-orange-100 to-red-100 border border-orange-200'
                         : message.isTegenargument
                         ? 'bg-gradient-to-r from-red-100 to-pink-100 border border-red-200'
                         : message.isReflectie
@@ -612,8 +620,7 @@ Houd het kort, vriendelijk en uitdagend voor ${session.selectedLevel} leerlingen
                             <span className="text-white text-xs">🎯</span>
                           </div>
                           <span className="text-sm font-medium text-gray-700">
-                            {message.isStelling ? 'Stelling & Eerste Tegenargument' :
-                             message.isTegenargument ? 'Tegenargument' :
+                            {message.isTegenargument ? 'Tegenargument' :
                              message.isReflectie ? 'Samenvatting & Reflectie' :
                              'Debatcoach'}
                           </span>
