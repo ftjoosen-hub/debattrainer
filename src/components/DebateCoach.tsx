@@ -249,6 +249,7 @@ Geef alleen het tegenargument, geen uitleg.`
 Hoe reageer je daarop?`, {
           isStelling: true,
           isTegenargument: true
+        })
       } else {
         addMessage('coach', `**Stelling:** ${stelling}
 
